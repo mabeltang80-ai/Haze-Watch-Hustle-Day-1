@@ -1,0 +1,664 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="color-scheme" content="dark">
+<meta name="theme-color" content="#111315">
+<meta name="description" content="Singapore PSI by area from NEA via data.gov.sg, with Open-Meteo weather for Singapore and ASEAN cities.">
+<title>Haze Watch</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&family=Newsreader:opsz,wght@6..72,400;6..72,500&display=swap">
+<style>
+/* Layout: one dark, quiet page. A wide haze card (map left, reading right) leads the Singapore view,
+   weather cards follow. Mono caps for labels, serif old-style numerals for readings, sans for prose.
+   Haze bands carry their own colours; the amber accent is only for tabs, chips and notices. */
+:root{
+  color-scheme:dark;
+  --bg:#111315;
+  --card:#181B1D;
+  --panel:#121416;
+  --line:#2A2E31;
+  --ink:#ECEEEF;
+  --soft:#D3D7D9;
+  --muted:#9AA0A4;
+  --faint:#6C7377;
+  --accent:#E8A94B;
+  --accent-soft:#2C2314;
+  --c-good:#5BAA8A;
+  --c-moderate:#E0BE3F;
+  --c-unhealthy:#E5705F;
+  --c-very:#A67ED1;
+  --c-hazard:#D95F7C;
+  --serif:'Newsreader',Georgia,'Times New Roman',serif;
+  --sans:'Inter',system-ui,-apple-system,'Segoe UI',sans-serif;
+  --mono:'JetBrains Mono',ui-monospace,'SF Mono',Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box}
+body{
+  margin:0;background:var(--bg);color:var(--ink);
+  font:15px/1.5 var(--sans);
+  padding-block:28px 56px;
+  padding-left:max(16px,env(safe-area-inset-left,0px));
+  padding-right:max(16px,env(safe-area-inset-right,0px));
+}
+.wrap{max-width:1200px;margin:0 auto}
+button{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--accent);outline-offset:3px}
+.num-serif{font-family:var(--serif);font-weight:400;font-variant-numeric:oldstyle-nums;font-feature-settings:"onum" 1}
+
+/* header */
+.top{display:flex;flex-wrap:wrap;gap:14px 24px;align-items:center;justify-content:space-between}
+.brand{display:flex;align-items:center;gap:12px;font:400 22px var(--serif)}
+.brand i{width:10px;height:10px;border-radius:50%;background:var(--accent)}
+.seg{display:inline-flex;padding:3px;background:var(--card);border:1px solid var(--line);border-radius:6px}
+.seg button{border:0;background:none;color:var(--muted);font:500 12.5px var(--mono);letter-spacing:.12em;text-transform:uppercase;padding:9px 18px;border-radius:4px;cursor:pointer}
+.seg button[aria-selected="true"]{background:var(--accent-soft);color:var(--accent)}
+.status{display:flex;flex-wrap:wrap;align-items:center;gap:8px 14px;margin-top:22px;padding:11px 14px;border:1px solid var(--line);border-radius:6px;background:var(--card);font:400 12.5px/1.5 var(--mono);color:var(--soft)}
+.status .sd{width:8px;height:8px;border-radius:50%;background:var(--sdc,var(--faint));flex:none}
+.status button{margin-left:auto;display:inline-flex;gap:8px}
+.status .btn{border:1px solid var(--line);background:var(--panel);color:var(--ink);border-radius:4px;padding:5px 11px;font:500 12px var(--mono);cursor:pointer}
+.status .btn:hover{border-color:var(--faint)}
+.status .acts{margin-left:auto;display:flex;flex-wrap:wrap;gap:8px}
+
+/* type */
+.eyebrow{font:500 12.5px/1.45 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+.intro{margin-top:44px}
+h1{font:400 clamp(34px,5.4vw,52px)/1.06 var(--serif);letter-spacing:-.01em;margin:12px 0 0;text-wrap:balance}
+.lede{color:var(--muted);font-size:17px;max-width:62ch;margin:14px 0 0;text-wrap:pretty}
+
+/* cards */
+.card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:clamp(20px,3.2vw,36px);min-width:0}
+.card h2{font:400 clamp(24px,3vw,32px)/1.15 var(--serif);margin:12px 0 0}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:6px;min-width:0}
+.row{display:grid;gap:22px;grid-template-columns:minmax(0,1.5fr) minmax(0,1fr);margin-top:22px}
+.row>*{min-width:0}
+@media (max-width:900px){.row{grid-template-columns:minmax(0,1fr)}}
+.haze{margin-top:30px}
+
+/* haze card */
+.hz-grid{display:grid;gap:22px;grid-template-columns:minmax(0,1.5fr) minmax(0,1fr);margin-top:26px}
+@media (max-width:900px){.hz-grid{grid-template-columns:minmax(0,1fr)}}
+.mappanel{display:flex;align-items:center;overflow:hidden}
+.sgmap{position:relative;width:100%;aspect-ratio:814/555;--s:1}
+.sgmap svg{position:absolute;inset:0;width:100%;height:100%;display:block}
+.sgmap .rg{cursor:pointer;transition:fill-opacity .15s}
+.sgmap .rg:hover{fill-opacity:.55}
+.sea{position:absolute;font:400 max(9px,calc(var(--s)*11.5px))/1 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--muted);pointer-events:none;white-space:nowrap}
+.sea.t{top:4.6%;left:50%;transform:translateX(-50%)}
+.sea.b{left:2.2%;bottom:3.4%}
+.lb{position:absolute;transform:translate(-50%,-50%);width:calc(var(--s)*130px);height:calc(var(--s)*83px);padding:0;background:#191C1E;border:1.5px solid var(--bc,var(--line));border-radius:5px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:calc(var(--s)*2px);cursor:pointer;color:var(--ink);transition:background .15s}
+.lb:hover{background:#202427}
+.lb[aria-pressed="true"]{outline:1.5px solid #E7E9EA;outline-offset:4px}
+.lb:focus-visible{outline:2px solid var(--accent);outline-offset:4px}
+.lb .n{font:500 max(8.5px,calc(var(--s)*10px))/1 var(--mono);letter-spacing:.16em;color:var(--muted)}
+.lb .v{font-family:var(--serif);font-weight:400;font-variant-numeric:oldstyle-nums;font-size:max(22px,calc(var(--s)*38px));line-height:1;color:#F3F4F4}
+.lb .b{font:400 max(10.5px,calc(var(--s)*14px))/1.1 var(--sans);color:var(--ink)}
+.detail{padding:clamp(20px,2.6vw,30px)}
+.bigrow{display:flex;align-items:center;flex-wrap:wrap;gap:6px 26px;margin-top:clamp(28px,4.4vw,52px)}
+.bignum{font-family:var(--serif);font-weight:400;font-variant-numeric:oldstyle-nums;font-size:clamp(76px,9vw,104px);line-height:.95;letter-spacing:-.02em}
+.bigband{display:flex;align-items:center;gap:12px;font:500 clamp(16px,1.6vw,19px) var(--sans)}
+.bigband i{width:12px;height:12px;border-radius:50%;background:var(--bc,var(--faint));flex:none}
+.segs{display:flex;align-items:center;gap:4px;height:16px;margin-top:20px}
+.segs span{flex:1;height:6px;border-radius:3px;background:var(--sc);opacity:.3}
+.segs span.on{height:14px;border-radius:7px;opacity:1}
+.segticks{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:4px;margin-top:10px}
+.segticks span{text-align:right;font:400 12.5px var(--mono);color:var(--muted)}
+.desc{font:400 clamp(16px,1.5vw,19px)/1.65 var(--sans);color:var(--soft);margin:26px 0 0;text-wrap:pretty}
+.pstats{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:24px 26px;margin-top:28px}
+.pstat{border-top:1px solid var(--line);padding-top:14px;min-width:0}
+.pstat dt{font:500 12px/1.3 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+.pstat dd{margin:8px 0 0;font:400 clamp(16px,1.6vw,20px)/1.2 var(--mono);color:var(--ink)}
+.hz-legend{display:flex;flex-wrap:wrap;gap:10px 30px;margin-top:24px}
+.hz-legend span{display:inline-flex;align-items:center;gap:10px;font:400 15.5px var(--sans);color:var(--soft)}
+.hz-legend i{width:14px;height:14px;border-radius:3px;display:inline-block}
+.hz-note{margin:14px 0 0;color:var(--muted);font-size:15px;text-wrap:pretty}
+
+/* weather cards */
+.wxhead{display:flex;align-items:center;gap:14px}
+.wxhead .ic{color:var(--soft);flex:none}
+.wxtemp{font-family:var(--serif);font-weight:400;font-variant-numeric:oldstyle-nums;font-size:clamp(64px,8vw,92px);line-height:.95;letter-spacing:-.02em}
+.wxcond{font:500 clamp(16px,1.6vw,19px) var(--sans)}
+.periods{list-style:none;margin:22px 0 0;padding:0;display:grid;gap:0}
+.periods li{display:flex;align-items:center;gap:16px;padding:16px 0;border-top:1px solid var(--line)}
+.periods li:first-child{border-top:0;padding-top:4px}
+.periods .ic{color:var(--soft);flex:none}
+.periods .tl{flex:1;min-width:0}
+.periods .tl b{display:block;font-weight:500}
+.periods .tl span{font-size:13.5px;color:var(--muted)}
+.periods .tt{font:400 26px var(--serif);font-variant-numeric:oldstyle-nums}
+.periods .tr{font:400 12.5px var(--mono);color:var(--muted);width:56px;text-align:right}
+
+/* ASEAN */
+.cities{display:grid;gap:16px;grid-template-columns:repeat(4,minmax(0,1fr));margin-top:20px}
+@media (max-width:1000px){.cities{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media (max-width:700px){.cities{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media (max-width:360px){.cities{grid-template-columns:minmax(0,1fr)}}
+.cc{display:block;width:100%;text-align:left;cursor:pointer;background:var(--card);border:1px solid var(--line);border-radius:8px;padding:18px;transition:border-color .15s}
+.cc:hover{border-color:var(--faint)}
+.cc[aria-pressed="true"]{border-color:#E7E9EA}
+.cc-top{display:flex;justify-content:space-between;align-items:flex-start;gap:8px}
+.cc .nm{font:500 15.5px var(--sans)}
+.cc .ctry{font:400 11.5px var(--mono);letter-spacing:.1em;text-transform:uppercase;color:var(--muted);margin-top:3px}
+.cc .ic{color:var(--muted);flex:none}
+.cc .t{font:400 44px/1 var(--serif);font-variant-numeric:oldstyle-nums;letter-spacing:-.02em;margin:18px 0 8px}
+.cc .cond{font-size:14px;color:var(--soft)}
+.cc .meta{font:400 12px var(--mono);color:var(--muted);margin-top:10px}
+.sechead{display:flex;flex-wrap:wrap;gap:14px;justify-content:space-between;align-items:flex-end;margin-top:44px}
+.sechead h2{font:400 clamp(24px,3vw,30px)/1.15 var(--serif);margin:10px 0 0}
+.chips{display:inline-flex;gap:6px}
+.chips button{border:1px solid var(--line);background:var(--card);color:var(--muted);border-radius:4px;font:500 12px var(--mono);letter-spacing:.08em;text-transform:uppercase;padding:7px 13px;cursor:pointer}
+.chips button[aria-pressed="true"]{background:var(--accent-soft);border-color:transparent;color:var(--accent)}
+.asmap{margin-top:20px;overflow:hidden}
+.asmap svg{display:block}
+.dot{cursor:pointer;outline:none}
+.dot circle.c{transition:stroke .15s}
+.dot:hover circle.c{stroke:var(--ink)}
+.dot:focus-visible circle.c{stroke:var(--accent)}
+.outlook{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px;margin-top:22px}
+@media (max-width:700px){.outlook{grid-template-columns:minmax(0,1fr)}}
+.od{background:var(--panel);border:1px solid var(--line);border-radius:6px;padding:18px;display:flex;align-items:center;gap:16px;min-width:0}
+.od .ic{color:var(--soft);flex:none}
+.od .dn{font:500 12px var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
+.od .oc{font-size:14.5px;margin-top:4px}
+.od .hl{font:400 26px var(--serif);font-variant-numeric:oldstyle-nums;margin-top:6px}
+.od .hl span{color:var(--faint)}
+.od .rp{font:400 12px var(--mono);color:var(--muted);margin-top:4px}
+.foot{margin:44px 0 0;color:var(--faint);font-size:13px;max-width:78ch}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+<style>:root{padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}[hidden]{display:none!important}img{max-width:100%}</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div class="brand"><i></i>Haze Watch</div>
+    <div class="seg" role="tablist" aria-label="Choose an area">
+      <button role="tab" id="tab-singapore" data-view="singapore">Singapore</button>
+      <button role="tab" id="tab-asean" data-view="asean">ASEAN</button>
+    </div>
+  </header>
+  <div id="status"></div>
+  <main id="view"></main>
+  <p class="foot">Haze readings (PSI, PM2.5, PM10) are from the National Environment Agency (NEA) through data.gov.sg and cover Singapore only. Weather for every city is from Open-Meteo. PSI bands follow Singapore's 24-hour PSI scale.</p>
+</div>
+
+<script>
+(function(){
+'use strict';
+
+/* ---------- reference ---------- */
+var BANDS=[
+  {key:'good',name:'Good',max:50,range:'0–50'},
+  {key:'moderate',name:'Moderate',max:100,range:'51–100'},
+  {key:'unhealthy',name:'Unhealthy',max:200,range:'101–200'},
+  {key:'very',name:'Very unhealthy',max:300,range:'201–300'},
+  {key:'hazard',name:'Hazardous',max:Infinity,range:'301+'}
+];
+var DESC={
+  good:'Air is clean. Normal activity is fine for everyone.',
+  moderate:'Air is acceptable. Normal activity is fine; unusually sensitive people may notice mild irritation.',
+  unhealthy:'Everyone may start to notice effects. Cut back on long or strenuous outdoor activity, especially if you are sensitive.',
+  very:'Health effects are likely for everyone. Avoid prolonged or strenuous outdoor activity and wear an N95 mask outdoors.',
+  hazard:'Serious health effects are possible. Stay indoors and keep physical activity to a minimum.'
+};
+function bandOf(p){for(var i=0;i<BANDS.length;i++){if(p<=BANDS[i].max)return BANDS[i]}return BANDS[4]}
+
+var REGIONS=[
+  {id:'north',name:'North',areas:'Woodlands, Yishun, Sembawang',box:[415,116],rect:[294,0,259,196]},
+  {id:'west',name:'West',areas:'Jurong, Tuas, Clementi',box:[180,263],rect:[0,0,294,555]},
+  {id:'central',name:'Central',areas:'Toa Payoh, Bishan, Orchard',box:[407,255],rect:[294,196,259,130]},
+  {id:'east',name:'East',areas:'Tampines, Changi, Pasir Ris',box:[635,263],rect:[553,0,261,555]},
+  {id:'south',name:'South',areas:'Marina Bay, Bukit Merah, Sentosa',box:[415,489],rect:[294,326,259,229]}
+];
+var ISLAND=[[394,55],[467,101],[514,121],[552,141],[591,153],[670,186],[747,251],[739,300],[647,333],[555,337],[472,353],[465,373],[447,398],[295,383],[87,396],[62,331],[112,235],[152,168],[223,95],[292,96],[309,94]];
+var ISLET=[[377,413],[394,406],[447,406],[463,413],[447,426],[394,430],[377,423]];
+var POLLUTANTS={pm25:'PM2.5',pm10:'PM10',o3:'O3',co:'CO',so2:'SO2'};
+
+var CITIES=[
+  {id:'singapore',name:'Singapore',country:'Singapore',code:'SIN',lat:1.3521,lon:103.8198,side:'r',ph:[31,74,11,225,60,95]},
+  {id:'kuala-lumpur',name:'Kuala Lumpur',country:'Malaysia',code:'KUL',lat:3.139,lon:101.6869,side:'l',ph:[32,72,8,225,65,95]},
+  {id:'jakarta',name:'Jakarta',country:'Indonesia',code:'JKT',lat:-6.2088,lon:106.8456,side:'r',ph:[33,68,9,270,30,2]},
+  {id:'manila',name:'Manila',country:'Philippines',code:'MNL',lat:14.5995,lon:120.9842,side:'r',ph:[32,72,14,45,25,2]},
+  {id:'bangkok',name:'Bangkok',country:'Thailand',code:'BKK',lat:13.7563,lon:100.5018,side:'r',ph:[34,62,10,45,15,1]},
+  {id:'hanoi',name:'Hanoi',country:'Vietnam',code:'HAN',lat:21.0285,lon:105.8542,side:'r',ph:[24,80,7,45,20,3]},
+  {id:'ho-chi-minh-city',name:'Ho Chi Minh City',country:'Vietnam',code:'SGN',lat:10.8231,lon:106.6297,side:'r',ph:[33,70,11,225,50,80]},
+  {id:'phnom-penh',name:'Phnom Penh',country:'Cambodia',code:'PNH',lat:11.5564,lon:104.9282,side:'l',ph:[33,66,9,45,20,2]},
+  {id:'vientiane',name:'Vientiane',country:'Laos',code:'VTE',lat:17.9757,lon:102.6331,side:'r',ph:[31,60,8,45,10,1]},
+  {id:'yangon',name:'Yangon',country:'Myanmar',code:'RGN',lat:16.8409,lon:96.1735,side:'r',ph:[33,64,9,45,15,1]},
+  {id:'bandar-seri-begawan',name:'Bandar Seri Begawan',country:'Brunei',code:'BWN',lat:4.8903,lon:114.9422,side:'r',ph:[31,82,8,225,60,80]},
+  {id:'dili',name:'Dili',country:'Timor-Leste',code:'DIL',lat:-8.5569,lon:125.5603,side:'l',ph:[31,68,12,90,10,2]}
+];
+
+/* WMO weather codes used by Open-Meteo: [label, icon, severity] */
+var WMO={0:['Clear sky','sun',0],1:['Mainly clear','sun',1],2:['Partly cloudy','partly',2],3:['Overcast','cloud',3],45:['Fog','haze',4],48:['Rime fog','haze',4],51:['Light drizzle','showers',5],53:['Drizzle','showers',5],55:['Heavy drizzle','showers',6],56:['Freezing drizzle','showers',6],57:['Freezing drizzle','showers',6],61:['Light rain','showers',6],63:['Rain','showers',7],65:['Heavy rain','showers',8],66:['Freezing rain','showers',8],67:['Freezing rain','showers',8],71:['Light snow','cloud',6],73:['Snow','cloud',7],75:['Heavy snow','cloud',8],77:['Snow grains','cloud',6],80:['Light showers','showers',6],81:['Showers','showers',7],82:['Heavy showers','showers',8],85:['Snow showers','cloud',7],86:['Snow showers','cloud',8],95:['Thunderstorm','storm',9],96:['Thunderstorm with hail','storm',10],99:['Thunderstorm with hail','storm',10]};
+function wmo(c){return WMO[c]||['Unknown','cloud',3]}
+
+var CLOUD='M7 14H16.5A3.5 3.5 0 0 0 16.9 7.02A5 5 0 0 0 7.3 8.4A3.3 3.3 0 0 0 7 14Z';
+var ICONS={
+  sun:'<circle cx="12" cy="12" r="4"/><path d="M12 2.5v2.2M12 19.3v2.2M2.5 12h2.2M19.3 12h2.2M5.3 5.3l1.6 1.6M17.1 17.1l1.6 1.6M5.3 18.7l1.6-1.6M17.1 6.9l1.6-1.6"/>',
+  partly:'<circle cx="8.5" cy="8" r="3"/><path d="M8.5 2.5v1.2M3 8h1.2M4.6 4.1l.9.9M12.4 4.1l-.9.9"/><path transform="translate(2.5 5)" fill="var(--card)" d="'+CLOUD+'"/>',
+  cloud:'<path transform="translate(0 3)" d="'+CLOUD+'"/>',
+  showers:'<path d="'+CLOUD+'"/><path d="M8 17.5l-1 2.5M12 17.5l-1 2.5M16 17.5l-1 2.5"/>',
+  storm:'<path d="'+CLOUD+'"/><path d="M12.5 14.5l-2.5 3.5h3l-2 3.5"/>',
+  haze:'<circle cx="12" cy="8" r="3.3"/><path d="M12 2.2v.9M5.5 8H4.6M19.4 8h-.9"/><path d="M4 14h16M6 17.5h12M8.5 21h7"/>'
+};
+function icon(k,size){
+  size=size||26;
+  return '<svg class="ic" width="'+size+'" height="'+size+'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'+ICONS[k]+'</svg>';
+}
+
+/* ---------- helpers ---------- */
+function pad(n){return n<10?'0'+n:''+n}
+function fmtTime(tz,d){return new Intl.DateTimeFormat('en-GB',{timeZone:tz,hour:'2-digit',minute:'2-digit',hourCycle:'h23'}).format(d)}
+function compass(deg){return ['N','NE','E','SE','S','SW','W','NW'][Math.round(((deg%360)+360)%360/45)%8]}
+function seeded(str){var h=2166136261,i;for(i=0;i<str.length;i++){h^=str.charCodeAt(i);h=Math.imul(h,16777619)}var a=h>>>0;return function(){a=(a+0x6D2B79F5)>>>0;var t=a;t=Math.imul(t^(t>>>15),t|1);t^=t+Math.imul(t^(t>>>7),t|61);return((t^(t>>>14))>>>0)/4294967296}}
+function dash(v,unit){return v==null||isNaN(v)?'–':v+(unit||'')}
+
+/* ---------- data: NEA via data.gov.sg ---------- */
+var PSI_URLS=['https://api-open.data.gov.sg/v2/real-time/api/psi','https://api.data.gov.sg/v1/environment/psi'];
+function getJSON(url){
+  var c=new AbortController(),t=setTimeout(function(){c.abort()},9000);
+  return fetch(url,{signal:c.signal,headers:{Accept:'application/json'}}).then(function(r){
+    if(!r.ok)throw new Error('HTTP '+r.status);
+    return r.json();
+  }).finally(function(){clearTimeout(t)});
+}
+function parsePSI(json){
+  var d=(json&&json.data)||json||{},item=(d.items||[])[0];
+  if(!item||!item.readings)throw new Error('No PSI reading in response');
+  var R=item.readings,out={timestamp:item.timestamp,updated:item.updatedTimestamp||item.update_timestamp||item.timestamp,national:null,regions:{}};
+  function g(key,region){var o=R[key];return o&&typeof o[region]==='number'?o[region]:null}
+  out.national=g('psi_twenty_four_hourly','national');
+  ['north','south','east','west','central'].forEach(function(r){
+    var subs={pm25:g('pm25_sub_index',r),pm10:g('pm10_sub_index',r),o3:g('o3_sub_index',r),co:g('co_sub_index',r),so2:g('so2_sub_index',r)};
+    var main=null,best=-1;
+    Object.keys(subs).forEach(function(k){if(subs[k]!=null&&subs[k]>best){best=subs[k];main=POLLUTANTS[k]}});
+    out.regions[r]={psi:g('psi_twenty_four_hourly',r),pm25:g('pm25_twenty_four_hourly',r),pm10:g('pm10_twenty_four_hourly',r),main:main};
+  });
+  var any=Object.keys(out.regions).some(function(r){return out.regions[r].psi!=null});
+  if(!any)throw new Error('PSI values missing');
+  if(out.national==null){out.national=Math.max.apply(null,Object.keys(out.regions).map(function(r){return out.regions[r].psi||0}))}
+  return out;
+}
+function loadPSI(){
+  return getJSON(PSI_URLS[0]).then(parsePSI).catch(function(){return getJSON(PSI_URLS[1]).then(parsePSI)});
+}
+
+/* ---------- data: Open-Meteo ---------- */
+function parseCurrent(w){
+  var c=w.current,d=w.daily,days=[],i;
+  for(i=0;i<d.time.length;i++){days.push({date:d.time[i],code:d.weather_code[i],hi:Math.round(d.temperature_2m_max[i]),lo:Math.round(d.temperature_2m_min[i]),rain:d.precipitation_probability_max?d.precipitation_probability_max[i]:null})}
+  return {tz:w.timezone,time:c.time,temp:Math.round(c.temperature_2m),feels:Math.round(c.apparent_temperature),hum:Math.round(c.relative_humidity_2m),precip:c.precipitation,code:c.weather_code,wind:Math.round(c.wind_speed_10m),deg:c.wind_direction_10m,days:days};
+}
+function loadWeather(){
+  var lat=CITIES.map(function(c){return c.lat}).join(','),lon=CITIES.map(function(c){return c.lon}).join(',');
+  var url='https://api.open-meteo.com/v1/forecast?latitude='+lat+'&longitude='+lon+'&current=temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,weather_code,wind_speed_10m,wind_direction_10m&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max&timezone=auto&forecast_days=4';
+  return getJSON(url).then(function(json){
+    var list=Array.isArray(json)?json:[json],out={};
+    CITIES.forEach(function(c,i){if(!list[i]||!list[i].current)throw new Error('Weather missing for '+c.name);out[c.id]=parseCurrent(list[i])});
+    return out;
+  });
+}
+function loadHourly(){
+  var url='https://api.open-meteo.com/v1/forecast?latitude=1.3521&longitude=103.8198&hourly=temperature_2m,precipitation_probability,weather_code,visibility&timezone=Asia%2FSingapore&forecast_days=2';
+  return getJSON(url).then(function(json){
+    var h=json.hourly;
+    if(!h||!h.time)throw new Error('No hourly data');
+    return {time:h.time,temp:h.temperature_2m,rain:h.precipitation_probability,code:h.weather_code,vis:h.visibility};
+  });
+}
+
+/* ---------- placeholders (layout preview only) ---------- */
+function placeholderPSI(){
+  var t=new Date(Math.floor(Date.now()/3.6e6)*3.6e6).toISOString();
+  var base={north:[70,24,41],south:[73,26,44],east:[69,22,39],west:[87,31,52],central:[74,33,49]},out={timestamp:t,updated:t,national:87,regions:{}};
+  Object.keys(base).forEach(function(k){out.regions[k]={psi:base[k][0],pm25:base[k][1],pm10:base[k][2],main:'PM2.5'}});
+  return out;
+}
+function placeholderWX(){
+  var out={},base=new Date(),i;
+  CITIES.forEach(function(c){
+    var p=c.ph,r=seeded('ph-'+c.id),days=[];
+    for(i=0;i<4;i++){
+      var dt=new Date(base.getTime()+i*864e5),hi=p[0]+Math.round(r()*3-2),codes=[p[5],p[5],2,3,80];
+      days.push({date:dt.toISOString().slice(0,10),code:codes[Math.floor(r()*codes.length)],hi:hi,lo:hi-6,rain:Math.max(0,Math.min(100,p[4]+Math.round(r()*30-15)))});
+    }
+    out[c.id]={tz:'Asia/Singapore',time:'',temp:p[0],feels:p[0]+3,hum:p[1],precip:0,code:p[5],wind:p[2],deg:p[3],days:days};
+  });
+  return out;
+}
+function placeholderHourly(){
+  var day=new Intl.DateTimeFormat('en-CA',{timeZone:'Asia/Singapore'}).format(new Date());
+  var next=new Date(new Date(day+'T00:00:00Z').getTime()+864e5).toISOString().slice(0,10);
+  var o={time:[],temp:[],rain:[],code:[],vis:[]},d,h;
+  [day,next].forEach(function(dd){for(h=0;h<24;h++){
+    o.time.push(dd+'T'+pad(h)+':00');
+    o.temp.push(Math.round((27.5+5*Math.max(0,Math.sin((h-7)*Math.PI/14)))*10)/10);
+    var rp=h>=13&&h<=18?65:(h>=19&&h<=21?40:15);
+    o.rain.push(rp);o.code.push(rp>=60?95:(rp>=40?80:(h>=6&&h<=18?2:3)));o.vis.push(10000);
+  }});
+  return o;
+}
+
+/* ---------- state ---------- */
+var D={psi:null,psiSrc:'none',wx:null,wxSrc:'none',hr:null,hrSrc:'none',loading:true};
+var state={view:location.hash==='#asean'?'asean':'singapore',region:'central',city:'jakarta',sort:'warm'};
+var view=document.getElementById('view'),statusEl=document.getElementById('status');
+
+function load(){
+  D.loading=true;D.psi=null;D.wx=null;D.hr=null;D.psiSrc=D.wxSrc=D.hrSrc='none';
+  render();
+  Promise.allSettled([loadPSI(),loadWeather(),loadHourly()]).then(function(res){
+    D.loading=false;
+    if(res[0].status==='fulfilled'){D.psi=res[0].value;D.psiSrc='live'}
+    if(res[1].status==='fulfilled'){D.wx=res[1].value;D.wxSrc='live'}
+    if(res[2].status==='fulfilled'){D.hr=res[2].value;D.hrSrc='live'}
+    render();
+  });
+}
+function usePlaceholders(){
+  if(!D.psi){D.psi=placeholderPSI();D.psiSrc='placeholder'}
+  if(!D.wx){D.wx=placeholderWX();D.wxSrc='placeholder'}
+  if(!D.hr){D.hr=placeholderHourly();D.hrSrc='placeholder'}
+  render();
+}
+
+/* ---------- status bar ---------- */
+function statusHTML(){
+  function row(color,text,acts){return '<div class="status" role="status" style="--sdc:'+color+'"><span class="sd"></span><span>'+text+'</span>'+(acts?'<span class="acts">'+acts+'</span>':'')+'</div>'}
+  if(D.loading)return row('var(--faint)','Loading the latest readings from NEA (data.gov.sg) and Open-Meteo.','');
+  var miss=[],ph=[];
+  if(D.psiSrc==='none')miss.push('haze readings from NEA');
+  if(D.wxSrc==='none'||D.hrSrc==='none')miss.push('weather from Open-Meteo');
+  if(D.psiSrc==='placeholder')ph.push('haze');
+  if(D.wxSrc==='placeholder'||D.hrSrc==='placeholder')ph.push('weather');
+  var retry='<button class="btn" data-act="reload">Try again</button>';
+  if(miss.length){
+    return row('var(--c-moderate)','Could not load '+miss.join(' or ')+'. Some previews block requests to outside sites.'+(ph.length?' Placeholder values are shown for '+ph.join(' and ')+'.':''),retry+'<button class="btn" data-act="preview">Preview layout with placeholder values</button>');
+  }
+  if(ph.length)return row('var(--c-moderate)','Placeholder values for '+ph.join(' and ')+'. They are only for previewing the layout and are not real readings.',retry);
+  return row('var(--c-good)','Live data. Haze from NEA via data.gov.sg, weather from Open-Meteo.','');
+}
+
+/* ---------- haze card ---------- */
+function R(id){var r=D.psi&&D.psi.regions[id];return r&&r.psi!=null?r:null}
+function colorOf(id){var r=R(id);return r?'var(--c-'+bandOf(r.psi).key+')':'var(--faint)'}
+function mapSVG(){
+  var poly=ISLAND.map(function(p){return p.join(',')}).join(' '),isl=ISLET.map(function(p){return p.join(',')}).join(' ');
+  var s='<svg viewBox="0 0 814 555" role="img" aria-label="Schematic map of Singapore with five PSI regions"><defs><clipPath id="isl"><polygon points="'+poly+'"/></clipPath></defs><g clip-path="url(#isl)">';
+  REGIONS.forEach(function(r){
+    s+='<rect class="rg" data-act="region" data-id="'+r.id+'" x="'+r.rect[0]+'" y="'+r.rect[1]+'" width="'+r.rect[2]+'" height="'+r.rect[3]+'" fill-opacity="'+(R(r.id)?'.42':'.2')+'" style="fill:'+colorOf(r.id)+'"/>';
+  });
+  s+='<g stroke-width="2.4" style="stroke:var(--panel)"><line x1="294" y1="0" x2="294" y2="555"/><line x1="553" y1="0" x2="553" y2="555"/><line x1="294" y1="196" x2="553" y2="196"/><line x1="294" y1="326" x2="553" y2="326"/></g></g>';
+  s+='<polygon class="rg" data-act="region" data-id="south" points="'+isl+'" fill-opacity="'+(R('south')?'.42':'.2')+'" style="fill:'+colorOf('south')+'"/>';
+  s+='<line x1="415" y1="373" x2="415" y2="447" stroke-width="1.4" stroke-dasharray="1.5 4" stroke-linecap="round" style="stroke:var(--muted)"/>';
+  s+='<circle cx="415" cy="368" r="4" style="fill:var(--muted);stroke:var(--panel)" stroke-width="1.5"/></svg>';
+  return s;
+}
+function boxHTML(r){
+  var rd=R(r.id),b=rd?bandOf(rd.psi):null;
+  var left=(r.box[0]/814*100).toFixed(2),top=(r.box[1]/555*100).toFixed(2);
+  return '<button class="lb" data-act="region" data-id="'+r.id+'" data-fk="region:'+r.id+'" aria-pressed="'+(state.region===r.id)+'" style="left:'+left+'%;top:'+top+'%;--bc:'+(b?'var(--c-'+b.key+')':'var(--line)')+'" aria-label="'+r.name+(rd?', PSI '+rd.psi+', '+b.name:', no reading')+'">'+
+    '<span class="n">'+r.name.toUpperCase()+'</span><span class="v">'+dash(rd&&rd.psi)+'</span><span class="b">'+(rd?b.name:'No reading')+'</span></button>';
+}
+function hazeDetail(){
+  var r=REGIONS.filter(function(q){return q.id===state.region})[0],rd=R(r.id),b=rd?bandOf(rd.psi):null;
+  var eb='<div class="eyebrow">'+r.name+' · e.g. '+r.areas+'</div>';
+  var edges=['50','100','200','300','300+'];
+  var segs=BANDS.map(function(x){return '<span class="'+(b&&b.key===x.key?'on':'')+'" style="--sc:var(--c-'+x.key+')"></span>'}).join('');
+  var ticks=edges.map(function(t){return '<span>'+t+'</span>'}).join('');
+  var vals=rd?{pm25:dash(rd.pm25)+(rd.pm25!=null?' µg/m³':''),pm10:dash(rd.pm10)+(rd.pm10!=null?' µg/m³':''),main:rd.main||'–'}:{pm25:'–',pm10:'–',main:'–'};
+  return eb+
+    '<div class="bigrow"><div class="bignum" aria-label="PSI '+dash(rd&&rd.psi)+'">'+dash(rd&&rd.psi)+'</div>'+
+    '<div class="bigband" style="--bc:'+(b?'var(--c-'+b.key+')':'var(--faint)')+'"><i></i>'+(b?b.name:(D.loading?'Loading':'No reading'))+'</div></div>'+
+    '<div class="segs" aria-hidden="true">'+segs+'</div><div class="segticks" aria-hidden="true">'+ticks+'</div>'+
+    '<p class="desc">'+(b?DESC[b.key]:(D.loading?'Waiting for the latest NEA reading.':'NEA readings are not available right now.'))+'</p>'+
+    '<dl class="pstats"><div class="pstat"><dt>PM2.5, 24 h</dt><dd>'+vals.pm25+'</dd></div><div class="pstat"><dt>PM10, 24 h</dt><dd>'+vals.pm10+'</dd></div>'+
+    '<div class="pstat"><dt>Main pollutant</dt><dd>'+vals.main+'</dd></div></dl>';
+}
+function hazeNote(){
+  if(D.loading)return 'Loading the latest reading from NEA.';
+  if(D.psiSrc==='none')return 'The latest reading could not be loaded from NEA through data.gov.sg. Area boundaries are approximate.';
+  if(D.psiSrc==='placeholder')return 'Placeholder values for previewing the layout. They are not NEA readings. Area boundaries are approximate. Tap an area for details.';
+  var a=new Date(D.psi.timestamp),u=new Date(D.psi.updated),ok=!isNaN(a)&&!isNaN(u);
+  return (ok?'Reading for '+fmtTime('Asia/Singapore',a)+' SGT, updated '+fmtTime('Asia/Singapore',u)+'. ':'')+'Area boundaries are approximate. PSI is a 24-hour measure and NEA updates it every hour. Tap an area for details.';
+}
+function hazeCard(){
+  var legend=BANDS.map(function(b){return '<span><i style="background:var(--c-'+b.key+')"></i>'+b.name+' '+b.range+'</span>'}).join('');
+  return '<section class="card haze"><div class="eyebrow">Singapore · NEA 24-hour PSI</div><h2>PSI by area</h2>'+
+    '<div class="hz-grid"><div class="panel mappanel"><div class="sgmap" id="sgmap">'+mapSVG()+
+      '<span class="sea t">Johor, Malaysia</span><span class="sea b">Singapore Strait</span>'+REGIONS.map(boxHTML).join('')+'</div></div>'+
+    '<div class="panel detail">'+hazeDetail()+'</div></div>'+
+    '<div class="hz-legend">'+legend+'</div><p class="hz-note">'+hazeNote()+'</p></section>';
+}
+
+/* ---------- Singapore weather ---------- */
+function periods(){
+  var hr=D.hr,sg=D.wx&&D.wx.singapore;
+  if(!hr||!sg)return null;
+  var today=(sg.time&&sg.time.slice(0,10))||hr.time[0].slice(0,10);
+  /* [label, test(date, hour)] */
+  var defs=[
+    ['Morning',function(d,h){return d===today&&h>=6&&h<=11}],
+    ['Afternoon',function(d,h){return d===today&&h>=12&&h<=17}],
+    ['Evening',function(d,h){return d===today&&h>=18&&h<=21}],
+    ['Night',function(d,h){return (d===today&&h>=22)||(d>today&&h<=5)}]
+  ],out=[];
+  defs.forEach(function(p){
+    var t=[],rain=0,worst=-1,code=0,i;
+    for(i=0;i<hr.time.length;i++){
+      var d=hr.time[i].slice(0,10),h=+hr.time[i].slice(11,13);
+      if(!p[1](d,h)||hr.temp[i]==null)continue;
+      t.push(hr.temp[i]);rain=Math.max(rain,hr.rain[i]||0);
+      var sev=wmo(hr.code[i])[2];if(sev>worst){worst=sev;code=hr.code[i]}
+    }
+    out.push(t.length?{label:p[0],temp:Math.round(t.reduce(function(a,b){return a+b},0)/t.length),rain:rain,code:code}:{label:p[0],temp:null,rain:null,code:null});
+  });
+  return out;
+}
+function visNow(){
+  var hr=D.hr,sg=D.wx&&D.wx.singapore;
+  if(!hr||!sg||!sg.time)return null;
+  var i=hr.time.indexOf(sg.time.slice(0,13)+':00');
+  return i>=0&&hr.vis[i]!=null?Math.round(hr.vis[i]/100)/10:null;
+}
+function rainNow(){
+  var hr=D.hr,sg=D.wx&&D.wx.singapore;
+  if(!hr||!sg||!sg.time)return null;
+  var i=hr.time.indexOf(sg.time.slice(0,13)+':00');
+  return i>=0?hr.rain[i]:null;
+}
+function wxTag(src){return src==='placeholder'?' · Placeholder':''}
+function nowCard(){
+  var w=D.wx&&D.wx.singapore;
+  if(!w)return '<section class="card"><div class="eyebrow">Singapore · Now</div><h2>Weather</h2><p class="desc">'+(D.loading?'Loading weather from Open-Meteo.':'Weather from Open-Meteo is not available right now.')+'</p></section>';
+  var c=wmo(w.code),vis=visNow(),rn=rainNow();
+  return '<section class="card"><div class="eyebrow">Singapore · Now'+wxTag(D.wxSrc)+'</div>'+
+    '<div class="bigrow" style="margin-top:26px"><div class="wxtemp">'+w.temp+'°</div><div class="wxhead">'+icon(c[1],34)+'<span class="wxcond">'+c[0]+'</span></div></div>'+
+    '<dl class="pstats">'+
+      '<div class="pstat"><dt>Feels like</dt><dd>'+w.feels+'°C</dd></div>'+
+      '<div class="pstat"><dt>Humidity</dt><dd>'+w.hum+'%</dd></div>'+
+      '<div class="pstat"><dt>Wind</dt><dd>'+compass(w.deg)+' '+w.wind+' km/h</dd></div>'+
+      '<div class="pstat"><dt>Visibility</dt><dd>'+dash(vis,' km')+'</dd></div>'+
+      '<div class="pstat"><dt>Chance of rain</dt><dd>'+dash(rn,'%')+'</dd></div>'+
+      '<div class="pstat"><dt>Rain now</dt><dd>'+dash(w.precip,' mm')+'</dd></div>'+
+    '</dl></section>';
+}
+function todayCard(){
+  var ps=periods();
+  if(!ps)return '<section class="card"><div class="eyebrow">Singapore · Today</div><h2>Through the day</h2><p class="desc">'+(D.loading?'Loading forecast from Open-Meteo.':'The hourly forecast from Open-Meteo is not available right now.')+'</p></section>';
+  return '<section class="card"><div class="eyebrow">Singapore · Today'+wxTag(D.hrSrc)+'</div><h2>Through the day</h2><ul class="periods">'+
+    ps.map(function(p){
+      if(p.temp==null)return '<li><div class="tl"><b>'+p.label+'</b><span>No data</span></div></li>';
+      var c=wmo(p.code);
+      return '<li>'+icon(c[1],28)+'<div class="tl"><b>'+p.label+'</b><span>'+c[0]+'</span></div><div class="tr">'+p.rain+'% rain</div><div class="tt">'+p.temp+'°</div></li>';
+    }).join('')+'</ul></section>';
+}
+
+/* ---------- views ---------- */
+function renderSG(){
+  var d=new Intl.DateTimeFormat('en-SG',{timeZone:'Asia/Singapore',weekday:'long',day:'numeric',month:'long',year:'numeric'}).format(new Date());
+  var title='Singapore',lede='Haze readings come from the National Environment Agency through data.gov.sg. Weather comes from Open-Meteo.';
+  if(D.psi){
+    var ids=Object.keys(D.psi.regions).filter(function(k){return D.psi.regions[k].psi!=null});
+    var top=ids.reduce(function(a,b){return D.psi.regions[b].psi>D.psi.regions[a].psi?b:a});
+    var low=ids.reduce(function(a,b){return D.psi.regions[b].psi<D.psi.regions[a].psi?b:a});
+    var nm=function(id){return REGIONS.filter(function(r){return r.id===id})[0].name};
+    title=bandOf(D.psi.national).name+' air across Singapore';
+    lede='The national 24-hour PSI is '+D.psi.national+'. '+nm(top)+' is highest at '+D.psi.regions[top].psi+' and '+nm(low)+' is lowest at '+D.psi.regions[low].psi+'.'+(D.psiSrc==='placeholder'?' These are placeholder values.':'');
+  }
+  view.innerHTML='<section class="intro"><div class="eyebrow">'+d+' · <span id="clock"></span></div><h1>'+title+'</h1><p class="lede">'+lede+'</p></section>'+
+    hazeCard()+'<div class="row">'+nowCard()+todayCard()+'</div>';
+}
+function sortedCities(){
+  var l=CITIES.slice();
+  if(state.sort==='warm'&&D.wx)l.sort(function(a,b){return D.wx[b.id].temp-D.wx[a.id].temp});
+  else l.sort(function(a,b){return a.name.localeCompare(b.name)});
+  return l;
+}
+function cityDay(str){return new Intl.DateTimeFormat('en-GB',{timeZone:'UTC',weekday:'short',day:'numeric'}).format(new Date(str+'T12:00:00Z'))}
+function renderAS(){
+  var sel=CITIES.filter(function(c){return c.id===state.city})[0],w=D.wx&&D.wx[sel.id];
+  var lede='Current weather for '+CITIES.length+' cities, from Open-Meteo. Haze readings are published for Singapore only, from NEA, so they appear in the Singapore view.';
+  if(D.wx){
+    var hot=CITIES.reduce(function(a,b){return D.wx[b.id].temp>D.wx[a.id].temp?b:a}),cool=CITIES.reduce(function(a,b){return D.wx[b.id].temp<D.wx[a.id].temp?b:a});
+    lede=hot.name+' is warmest at '+D.wx[hot.id].temp+'°C and '+cool.name+' is coolest at '+D.wx[cool.id].temp+'°C. Haze readings are published for Singapore only, from NEA, so they appear in the Singapore view.';
+  }
+  var cards=sortedCities().map(function(c){
+    var cw=D.wx&&D.wx[c.id],cd=cw?wmo(cw.code):null;
+    return '<button class="cc" data-act="city" data-id="'+c.id+'" data-fk="city:'+c.id+'" aria-pressed="'+(c.id===state.city)+'">'+
+      '<div class="cc-top"><div><div class="nm">'+c.name+'</div><div class="ctry">'+c.country+'</div></div>'+(cd?icon(cd[1],26):'')+'</div>'+
+      '<div class="t">'+(cw?cw.temp+'°':'–')+'</div><div class="cond">'+(cd?cd[0]:(D.loading?'Loading':'No data'))+'</div>'+
+      (cw?'<div class="meta">'+cw.hum+'% · '+compass(cw.deg)+' '+cw.wind+' km/h</div>':'')+'</button>';
+  }).join('');
+  var detail;
+  if(w){
+    var c=wmo(w.code),today=w.days[0];
+    detail='<div class="eyebrow">Local time '+fmtTime(w.tz||'Asia/Singapore',new Date())+' · '+sel.country+wxTag(D.wxSrc)+'</div>'+
+      '<h2 style="margin-top:10px">'+sel.name+'</h2>'+
+      '<div class="bigrow" style="margin-top:28px"><div class="wxtemp">'+w.temp+'°</div><div class="wxhead">'+icon(c[1],34)+'<span class="wxcond">'+c[0]+'</span></div></div>'+
+      '<dl class="pstats"><div class="pstat"><dt>Feels like</dt><dd>'+w.feels+'°C</dd></div><div class="pstat"><dt>Humidity</dt><dd>'+w.hum+'%</dd></div>'+
+      '<div class="pstat"><dt>Wind</dt><dd>'+compass(w.deg)+' '+w.wind+' km/h</dd></div><div class="pstat"><dt>Rain today</dt><dd>'+dash(today&&today.rain,'%')+'</dd></div>'+
+      '<div class="pstat"><dt>High / low</dt><dd>'+today.hi+'° / '+today.lo+'°</dd></div><div class="pstat"><dt>Rain now</dt><dd>'+dash(w.precip,' mm')+'</dd></div></dl>';
+  }else{
+    detail='<div class="eyebrow">'+sel.country+'</div><h2 style="margin-top:10px">'+sel.name+'</h2><p class="desc">'+(D.loading?'Loading weather from Open-Meteo.':'Weather from Open-Meteo is not available right now.')+'</p>';
+  }
+  var outlook='';
+  if(w){
+    outlook='<section class="card" style="margin-top:22px"><div class="eyebrow">'+sel.name+' · Next three days'+wxTag(D.wxSrc)+'</div><div class="outlook">'+
+      w.days.slice(1,4).map(function(o){var c=wmo(o.code);
+        return '<div class="od">'+icon(c[1],34)+'<div><div class="dn">'+cityDay(o.date)+'</div><div class="oc">'+c[0]+'</div><div class="hl">'+o.hi+'° <span>'+o.lo+'°</span></div><div class="rp">'+dash(o.rain,'% chance of rain')+'</div></div></div>';
+      }).join('')+'</div></section>';
+  }
+  view.innerHTML='<section class="intro"><div class="eyebrow">Southeast Asia · '+CITIES.length+' cities</div><h1>Weather across ASEAN</h1><p class="lede">'+lede+'</p></section>'+
+    '<div class="row"><section class="card"><div class="eyebrow">Regional map</div><h2>Temperature by city</h2><div class="panel asmap" id="asmap"></div></section>'+
+    '<section class="card">'+detail+'</section></div>'+outlook+
+    '<div class="sechead"><div><div class="eyebrow">All cities</div><h2>Compare at a glance</h2></div><div class="chips" role="group" aria-label="Sort cities">'+
+      '<button data-act="sort" data-id="warm" data-fk="sort:warm" aria-pressed="'+(state.sort==='warm')+'">Warmest first</button>'+
+      '<button data-act="sort" data-id="name" data-fk="sort:name" aria-pressed="'+(state.sort==='name')+'">A to Z</button></div></div>'+
+    '<div class="cities">'+cards+'</div>';
+}
+
+/* ---------- ASEAN map ---------- */
+function drawASMap(host){
+  var w=Math.max(280,host.clientWidth),h=Math.round(Math.min(Math.max(w*0.85,320),540));
+  var lon0=94,lon1=128,lat0=-10.5,lat1=23.5,pad=30;
+  var sc=Math.min((w-2*pad)/(lon1-lon0),(h-2*pad)/(lat1-lat0));
+  var ox=(w-sc*(lon1-lon0))/2,oy=(h-sc*(lat1-lat0))/2;
+  function X(lo){return ox+(lo-lon0)*sc}
+  function Y(la){return oy+(lat1-la)*sc}
+  var compact=w<520,r=compact?6:(w<640?10:12);
+  var s='<svg width="'+w+'" height="'+h+'" viewBox="0 0 '+w+' '+h+'" role="group" aria-label="Map of Southeast Asian cities showing current temperature">';
+  [-10,0,10,20].forEach(function(la){
+    var y=Y(la).toFixed(1);
+    s+='<line x1="'+X(lon0).toFixed(1)+'" x2="'+X(lon1).toFixed(1)+'" y1="'+y+'" y2="'+y+'" style="stroke:var(--line)" stroke-width="1"'+(la===0?' stroke-dasharray="4 4"':'')+'/>';
+    s+='<text x="'+(X(lon0)+6).toFixed(1)+'" y="'+(Y(la)-5).toFixed(1)+'" font-size="10.5" letter-spacing="1" style="fill:var(--faint)" font-family="var(--mono)">'+(la===0?'EQUATOR':Math.abs(la)+'°'+(la>0?'N':'S'))+'</text>';
+  });
+  [100,110,120].forEach(function(lo){
+    var x=X(lo).toFixed(1);
+    s+='<line x1="'+x+'" x2="'+x+'" y1="'+Y(lat1).toFixed(1)+'" y2="'+Y(lat0).toFixed(1)+'" style="stroke:var(--line)" stroke-width="1"/>';
+    s+='<text x="'+(X(lo)+5).toFixed(1)+'" y="'+(Y(lat0)-6).toFixed(1)+'" font-size="10.5" letter-spacing="1" style="fill:var(--faint)" font-family="var(--mono)">'+lo+'°E</text>';
+  });
+  if(!compact){
+    [['SOUTH CHINA SEA',113.5,15.2],['ANDAMAN SEA',95.6,9.5],['JAVA SEA',114,-4.2]].forEach(function(t){
+      s+='<text x="'+X(t[1]).toFixed(1)+'" y="'+Y(t[2]).toFixed(1)+'" text-anchor="middle" font-size="10.5" letter-spacing="1.6" style="fill:var(--faint)" font-family="var(--mono)">'+t[0]+'</text>';
+    });
+  }
+  CITIES.forEach(function(c){
+    var cw=D.wx&&D.wx[c.id],cx=X(c.lon),cy=Y(c.lat),on=c.id===state.city;
+    s+='<g class="dot" data-act="city" data-id="'+c.id+'" data-fk="city:'+c.id+'" role="button" tabindex="0" aria-label="'+c.name+(cw?', '+cw.temp+' degrees':', no data')+'">';
+    if(on)s+='<circle cx="'+cx.toFixed(1)+'" cy="'+cy.toFixed(1)+'" r="'+(r+5)+'" fill="none" stroke-width="1.5" style="stroke:#E7E9EA"/>';
+    s+='<circle class="c" cx="'+cx.toFixed(1)+'" cy="'+cy.toFixed(1)+'" r="'+r+'" stroke-width="1.5" style="fill:#191C1E;stroke:var(--muted)"/>';
+    if(!compact)s+='<text x="'+cx.toFixed(1)+'" y="'+(cy+4).toFixed(1)+'" text-anchor="middle" font-size="'+(r>10?12:11)+'" style="fill:var(--ink);pointer-events:none" font-family="var(--mono)">'+(cw?cw.temp:'–')+'</text>';
+    var lx=c.side==='l'?cx-r-(on?10:7):cx+r+(on?10:7),anc=c.side==='l'?'end':'start';
+    s+='<text x="'+lx.toFixed(1)+'" y="'+(cy+4).toFixed(1)+'" text-anchor="'+anc+'" font-size="'+(compact?10:12.5)+'" style="fill:var(--soft);pointer-events:none" font-family="'+(compact?'var(--mono)':'var(--sans)')+'">'+(compact?c.code:c.name)+'</text>';
+    s+='</g>';
+  });
+  s+='</svg>';
+  host.innerHTML=s;
+}
+
+/* ---------- render, events ---------- */
+function paintVisuals(){
+  if(state.view==='singapore'){
+    var m=document.getElementById('sgmap');
+    if(m){var s=Math.max(.62,Math.min(1,m.clientWidth/814));m.style.setProperty('--s',s.toFixed(3))}
+  }else{
+    var a=document.getElementById('asmap');
+    if(a)drawASMap(a);
+  }
+}
+function updateClock(){
+  var el=document.getElementById('clock');
+  if(el)el.textContent=fmtTime('Asia/Singapore',new Date())+' SGT';
+}
+function render(){
+  var ae=document.activeElement,fk=ae&&ae.getAttribute?ae.getAttribute('data-fk'):null;
+  statusEl.innerHTML=statusHTML();
+  if(state.view==='singapore')renderSG();else renderAS();
+  ['singapore','asean'].forEach(function(v){
+    var t=document.getElementById('tab-'+v);
+    t.setAttribute('aria-selected',String(state.view===v));
+    t.setAttribute('tabindex',state.view===v?'0':'-1');
+  });
+  paintVisuals();
+  updateClock();
+  if(fk){var n=document.querySelector('[data-fk="'+fk+'"]');if(n)n.focus({preventScroll:true})}
+}
+function act(t){
+  var a=t.getAttribute('data-act'),id=t.getAttribute('data-id');
+  if(a==='region'){state.region=id;render()}
+  else if(a==='city'){state.city=id;render()}
+  else if(a==='sort'){state.sort=id;render()}
+  else if(a==='reload'){load()}
+  else if(a==='preview'){usePlaceholders()}
+}
+function onClick(e){var t=e.target.closest('[data-act]');if(t)act(t)}
+view.addEventListener('click',onClick);
+statusEl.addEventListener('click',onClick);
+view.addEventListener('keydown',function(e){
+  var t=e.target;
+  if((e.key==='Enter'||e.key===' ')&&t.getAttribute&&t.getAttribute('data-act')&&t.tagName.toLowerCase()!=='button'){e.preventDefault();act(t)}
+});
+document.querySelectorAll('.seg button').forEach(function(b){
+  b.addEventListener('click',function(){location.hash=b.getAttribute('data-view')});
+});
+window.addEventListener('hashchange',function(){
+  var v=location.hash==='#asean'?'asean':'singapore';
+  if(v!==state.view){state.view=v;render()}
+});
+var lastW=0;
+if(window.ResizeObserver){
+  new ResizeObserver(function(){
+    var w=view.clientWidth;
+    if(w!==lastW){lastW=w;paintVisuals()}
+  }).observe(view);
+}
+setInterval(updateClock,20000);
+load();
+})();
+</script>
+</body>
+</html>
