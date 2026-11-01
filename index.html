@@ -4,22 +4,23 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <meta name="color-scheme" content="dark">
-<meta name="theme-color" content="#111315">
+<meta name="theme-color" content="#0B2231">
 <meta name="description" content="Singapore PSI by area from NEA via data.gov.sg, with Open-Meteo weather for Singapore and ASEAN cities.">
 <title>Haze Watch</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500&family=Newsreader:opsz,wght@6..72,400;6..72,500&display=swap">
 <style>
-/* Layout: one dark, quiet page. A wide haze card (map left, reading right) leads the Singapore view,
+/* Background: deep blue to green gradient; cards and panels are tinted to match.
+   Layout: one dark, quiet page. A wide haze card (map left, reading right) leads the Singapore view,
    weather cards follow. Mono caps for labels, serif old-style numerals for readings, sans for prose.
    Haze bands carry their own colours; the amber accent is only for tabs, chips and notices. */
 :root{
   color-scheme:dark;
-  --bg:#111315;
-  --card:#181B1D;
-  --panel:#121416;
-  --line:#2A2E31;
+  --bg:#0B2231;
+  --card:#0F1E29;
+  --panel:#0A161F;
+  --line:#233A4A;
   --ink:#ECEEEF;
   --soft:#D3D7D9;
   --muted:#9AA0A4;
@@ -37,7 +38,7 @@
 }
 *{box-sizing:border-box}
 body{
-  margin:0;background:var(--bg);color:var(--ink);
+  margin:0;background-color:var(--bg);background-image:linear-gradient(135deg,#0A2342 0%,#0B3544 48%,#0B4A3B 100%);background-attachment:fixed;color:var(--ink);
   font:15px/1.5 var(--sans);
   padding-block:28px 56px;
   padding-left:max(16px,env(safe-area-inset-left,0px));
@@ -88,8 +89,8 @@ h1{font:400 clamp(34px,5.4vw,52px)/1.06 var(--serif);letter-spacing:-.01em;margi
 .sea{position:absolute;font:400 max(9px,calc(var(--s)*11.5px))/1 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--muted);pointer-events:none;white-space:nowrap}
 .sea.t{top:4.6%;left:50%;transform:translateX(-50%)}
 .sea.b{left:2.2%;bottom:3.4%}
-.lb{position:absolute;transform:translate(-50%,-50%);width:calc(var(--s)*130px);height:calc(var(--s)*83px);padding:0;background:#191C1E;border:1.5px solid var(--bc,var(--line));border-radius:5px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:calc(var(--s)*2px);cursor:pointer;color:var(--ink);transition:background .15s}
-.lb:hover{background:#202427}
+.lb{position:absolute;transform:translate(-50%,-50%);width:calc(var(--s)*130px);height:calc(var(--s)*83px);padding:0;background:#122431;border:1.5px solid var(--bc,var(--line));border-radius:5px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:calc(var(--s)*2px);cursor:pointer;color:var(--ink);transition:background .15s}
+.lb:hover{background:#1A3342}
 .lb[aria-pressed="true"]{outline:1.5px solid #E7E9EA;outline-offset:4px}
 .lb:focus-visible{outline:2px solid var(--accent);outline-offset:4px}
 .lb .n{font:500 max(8.5px,calc(var(--s)*10px))/1 var(--mono);letter-spacing:.16em;color:var(--muted)}
@@ -113,7 +114,7 @@ h1{font:400 clamp(34px,5.4vw,52px)/1.06 var(--serif);letter-spacing:-.01em;margi
 .hz-note{margin:20px 0 0;color:var(--muted);font-size:15px;text-wrap:pretty}
 .mapstage{position:relative;width:100%}
 .mapfoot{position:absolute;inset:0;pointer-events:none}
-.mapchip,.maplegend{pointer-events:auto;background:#191C1E;border:1px solid var(--line);border-radius:6px}
+.mapchip,.maplegend{pointer-events:auto;background:#122431;border:1px solid var(--line);border-radius:6px}
 .mapchip{position:absolute;top:12px;right:12px;display:flex;align-items:center;gap:10px;padding:8px 12px 8px 10px;max-width:calc(100% - 24px)}
 .mapchip .ic{color:var(--soft);flex:none}
 .mapchip .tx{display:flex;flex-direction:column;gap:2px;min-width:0}
@@ -619,7 +620,7 @@ function drawASMap(host){
     var cw=D.wx&&D.wx[c.id],cx=X(c.lon),cy=Y(c.lat),on=c.id===state.city;
     s+='<g class="dot" data-act="city" data-id="'+c.id+'" data-fk="city:'+c.id+'" role="button" tabindex="0" aria-label="'+c.name+(cw?', '+cw.temp+' degrees':', no data')+'">';
     if(on)s+='<circle cx="'+cx.toFixed(1)+'" cy="'+cy.toFixed(1)+'" r="'+(r+5)+'" fill="none" stroke-width="1.5" style="stroke:#E7E9EA"/>';
-    s+='<circle class="c" cx="'+cx.toFixed(1)+'" cy="'+cy.toFixed(1)+'" r="'+r+'" stroke-width="1.5" style="fill:#191C1E;stroke:var(--muted)"/>';
+    s+='<circle class="c" cx="'+cx.toFixed(1)+'" cy="'+cy.toFixed(1)+'" r="'+r+'" stroke-width="1.5" style="fill:#122431;stroke:var(--muted)"/>';
     if(!compact)s+='<text x="'+cx.toFixed(1)+'" y="'+(cy+4).toFixed(1)+'" text-anchor="middle" font-size="'+(r>10?12:11)+'" style="fill:var(--ink);pointer-events:none" font-family="var(--mono)">'+(cw?cw.temp:'–')+'</text>';
     var lx=c.side==='l'?cx-r-(on?10:7):cx+r+(on?10:7),anc=c.side==='l'?'end':'start';
     s+='<text x="'+lx.toFixed(1)+'" y="'+(cy+4).toFixed(1)+'" text-anchor="'+anc+'" font-size="'+(compact?10:12.5)+'" style="fill:var(--soft);pointer-events:none" font-family="'+(compact?'var(--mono)':'var(--sans)')+'">'+(compact?c.code:c.name)+'</text>';
