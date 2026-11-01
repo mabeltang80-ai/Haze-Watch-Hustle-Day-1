@@ -110,10 +110,28 @@ h1{font:400 clamp(34px,5.4vw,52px)/1.06 var(--serif);letter-spacing:-.01em;margi
 .pstat{border-top:1px solid var(--line);padding-top:14px;min-width:0}
 .pstat dt{font:500 12px/1.3 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--muted)}
 .pstat dd{margin:8px 0 0;font:400 clamp(16px,1.6vw,20px)/1.2 var(--mono);color:var(--ink)}
-.hz-legend{display:flex;flex-wrap:wrap;gap:10px 30px;margin-top:24px}
-.hz-legend span{display:inline-flex;align-items:center;gap:10px;font:400 15.5px var(--sans);color:var(--soft)}
-.hz-legend i{width:14px;height:14px;border-radius:3px;display:inline-block}
-.hz-note{margin:14px 0 0;color:var(--muted);font-size:15px;text-wrap:pretty}
+.hz-note{margin:20px 0 0;color:var(--muted);font-size:15px;text-wrap:pretty}
+.mapstage{position:relative;width:100%}
+.mapfoot{position:absolute;inset:0;pointer-events:none}
+.mapchip,.maplegend{pointer-events:auto;background:#191C1E;border:1px solid var(--line);border-radius:6px}
+.mapchip{position:absolute;top:12px;right:12px;display:flex;align-items:center;gap:10px;padding:8px 12px 8px 10px;max-width:calc(100% - 24px)}
+.mapchip .ic{color:var(--soft);flex:none}
+.mapchip .tx{display:flex;flex-direction:column;gap:2px;min-width:0}
+.mapchip .l1{font:400 13px/1.25 var(--sans);color:var(--soft)}
+.mapchip .l1 b{font-weight:600;color:var(--ink)}
+.mapchip .l2{font:400 11px/1.2 var(--mono);color:var(--muted);white-space:nowrap}
+.maplegend{position:absolute;right:12px;bottom:12px;min-width:178px;padding:10px 12px 12px}
+.maplegend .lt{font:500 10.5px/1 var(--mono);letter-spacing:.14em;text-transform:uppercase;color:var(--muted);margin-bottom:10px}
+.maplegend ul{list-style:none;margin:0;padding:0;display:grid;gap:7px}
+.maplegend li{display:grid;grid-template-columns:10px 1fr auto;align-items:center;gap:9px;font:400 12.5px/1.2 var(--sans);color:var(--muted)}
+.maplegend li i{width:10px;height:10px;border-radius:2px}
+.maplegend li em{font:400 11px var(--mono);font-style:normal;color:var(--faint)}
+.maplegend li.on{color:var(--ink)}
+.maplegend li.on em{color:var(--soft)}
+@media (max-width:640px){
+  .mapfoot{position:static;display:flex;flex-direction:column;gap:10px;padding:12px;pointer-events:auto}
+  .mapchip,.maplegend{position:static;max-width:none}
+}
 
 /* weather cards */
 .wxhead{display:flex;align-items:center;gap:14px}
@@ -425,13 +443,24 @@ function hazeNote(){
   var a=new Date(D.psi.timestamp),u=new Date(D.psi.updated),ok=!isNaN(a)&&!isNaN(u);
   return (ok?'Reading for '+fmtTime('Asia/Singapore',a)+' SGT, updated '+fmtTime('Asia/Singapore',u)+'. ':'')+'Area boundaries are approximate. PSI is a 24-hour measure and NEA updates it every hour. Tap an area for details.';
 }
+function mapOverlays(){
+  var sel=R(state.region),selKey=sel?bandOf(sel.psi).key:'';
+  var rows=BANDS.map(function(b){
+    return '<li'+(b.key===selKey?' class="on" aria-current="true"':'')+'><i style="background:var(--c-'+b.key+')"></i><span>'+b.name+'</span><em>'+b.range+'</em></li>';
+  }).join('');
+  var w=D.wx&&D.wx.singapore,chip='';
+  if(w){
+    var c=wmo(w.code);
+    chip='<div class="mapchip" title="Weather from Open-Meteo">'+icon(c[1],22)+'<div class="tx"><span class="l1"><b>'+w.temp+'°C</b> '+c[0]+'</span><span class="l2">'+compass(w.deg)+' '+w.wind+' km/h'+(D.wxSrc==='placeholder'?' · placeholder':'')+'</span></div></div>';
+  }
+  return '<div class="mapfoot">'+chip+'<div class="maplegend"><div class="lt">24-hour PSI</div><ul aria-label="PSI bands">'+rows+'</ul></div></div>';
+}
 function hazeCard(){
-  var legend=BANDS.map(function(b){return '<span><i style="background:var(--c-'+b.key+')"></i>'+b.name+' '+b.range+'</span>'}).join('');
   return '<section class="card haze"><div class="eyebrow">Singapore · NEA 24-hour PSI</div><h2>PSI by area</h2>'+
-    '<div class="hz-grid"><div class="panel mappanel"><div class="sgmap" id="sgmap">'+mapSVG()+
-      '<span class="sea t">Johor, Malaysia</span><span class="sea b">Singapore Strait</span>'+REGIONS.map(boxHTML).join('')+'</div></div>'+
+    '<div class="hz-grid"><div class="panel mappanel"><div class="mapstage"><div class="sgmap" id="sgmap">'+mapSVG()+
+      '<span class="sea t">Johor, Malaysia</span><span class="sea b">Singapore Strait</span>'+REGIONS.map(boxHTML).join('')+'</div>'+mapOverlays()+'</div></div>'+
     '<div class="panel detail">'+hazeDetail()+'</div></div>'+
-    '<div class="hz-legend">'+legend+'</div><p class="hz-note">'+hazeNote()+'</p></section>';
+    '<p class="hz-note">'+hazeNote()+'</p></section>';
 }
 
 /* ---------- Singapore weather ---------- */
